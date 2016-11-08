@@ -70,8 +70,8 @@ public class TrafficController : MonoBehaviour
         foreach (var focalObject in m_focalObjects)
         {
             float yPos = focalObject.transform.position.z;
-            Debug.DrawLine(Vector3.zero, new Vector3(focalObject.transform.position.x, 0.01f, focalObject.transform.position.z));
-            Debug.DrawLine(Vector3.zero, new Vector3(focalObject.transform.position.x, 0.01f, focalObject.transform.position.z + SpawnRange), Color.red);
+            //Debug.DrawLine(Vector3.zero, new Vector3(focalObject.transform.position.x, 0.01f, focalObject.transform.position.z));
+            //Debug.DrawLine(Vector3.zero, new Vector3(focalObject.transform.position.x, 0.01f, focalObject.transform.position.z + SpawnRange), Color.red);
 
             bool overlappingRanges = false;
             foreach (var otherObject in m_focalObjects)

@@ -1,9 +1,15 @@
 ﻿using UnityEngine;
-using System.Collections;
+using System.Collections.Generic;
 
 public class Rider : MonoBehaviour
 {
     public float Progress { get { return m_progress; } }
+    public float Health {  get { return m_health; } }
+    public int TeamId { get; set; }
+
+    [Header("Effects")]
+    public ParticleSystem TrafficCollisionSystem = null;
+    public ParticleSystem EnemyCollisionSystem = null;
 
     [Header("Bike Attributes")]
     public float MinMoveSpeed = 0.01f;
@@ -33,6 +39,8 @@ public class Rider : MonoBehaviour
     private float m_accumulator = 0.0f;
     private float m_accumulatorMultiplier = 1.0f;
 
+    private float m_health = 1.0f;
+
     public void RiderStart()
     {
         m_heatmap = GetComponent<Heatmap>();
@@ -50,17 +58,12 @@ public class Rider : MonoBehaviour
 	
 	void Update ()
     {
+        if (!m_started) return;
+
         float offsetX = (m_targetOffset - m_offset) / (m_game.RoadGenerator.RoadWidth * 2.0f);
         float offsetY = Mathf.Clamp01(1.0f - offsetX);
         float targetAngle = Mathf.Atan2(offsetX, offsetY) * Mathf.Rad2Deg;
         
-        Debug.DrawLine(transform.position, transform.position + new Vector3(offsetX, 0.0f, 0.0f), Color.magenta);
-
-
-        //m_heatmap.UpdateHeatmap();
-        float steeringDirection = m_steering.UpdateSteering(targetAngle);
-       // Debug.Log("Steering direction: " + steeringDirection);
-
         m_progress += m_moveSpeed * GameTime.deltaTime;
 
         Vector3 direction;
@@ -68,22 +71,54 @@ public class Rider : MonoBehaviour
         Vector3 lastPosition = transform.position;
         transform.position = m_game.RoadGenerator.GetOffsetAtPoint(m_progress, m_offset, out direction) + new Vector3(0.0f, 0.02f, 0.0f);
 
-        Quaternion rotation = Quaternion.Euler(new Vector3(0.0f, Mathf.Atan2(direction.x, direction.z) * Mathf.Rad2Deg, 0.0f));
+        float riderDirectionAngle = Mathf.Atan2(direction.x, direction.z);
 
-        Debug.DrawLine(transform.position, transform.position + new Vector3(m_targetOffset, 0.0f, 0.0f), Color.cyan);
+        Quaternion rotation = Quaternion.Euler(new Vector3(0.0f, riderDirectionAngle * Mathf.Rad2Deg, 0.0f));
 
-        //if(Mathf.Abs(m_targetOffset - m_offset) < 0.002f)
-        {
-            // Pick a new target
-           m_targetOffset = Mathf.Lerp(-m_game.RoadGenerator.RoadWidth * 0.7f, m_game.RoadGenerator.RoadWidth * 0.7f, (Mathf.Sin(m_accumulator) + 1.0f) / 2.0f);
-            Debug.Log("NEW TARGET");
-        }
+        float steeringDirection = m_steering.UpdateSteering(targetAngle, riderDirectionAngle);
+
+        // Temp
+        m_targetOffset = Mathf.Lerp(-m_game.RoadGenerator.RoadWidth * 0.7f, m_game.RoadGenerator.RoadWidth * 0.7f, (Mathf.Sin(m_accumulator) + 1.0f) / 2.0f);
 
         // Steer towards the target
         Vector2 targetVec = new Vector2(steeringDirection, 0.0f);
         m_velocity = Vector2.Lerp(m_velocity, targetVec, Mathf.Clamp01(GameTime.deltaTime * CompensationSpeed));
 
         m_offset += m_velocity.x * Mathf.Clamp01(GameTime.deltaTime * TurnRate);
-        m_accumulator += GameTime.deltaTime * m_accumulatorMultiplier * 0.02f;                
+        m_accumulator += GameTime.deltaTime * m_accumulatorMultiplier * 0.02f;
+    }
+
+    void OnTriggerEnter(Collider collider)
+    {
+        if(collider.gameObject.layer == LayerMask.NameToLayer("TrafficCollision"))
+        {
+            if(TrafficCollisionSystem != null)
+            {
+                ParticleSystem newSystem = Instantiate(TrafficCollisionSystem);
+                newSystem.transform.position = transform.position;
+            }
+            
+            m_health -= 0.1f;
+
+            if(m_game.DebugCollisions)
+            {
+                m_steering.DrawHistory = true;
+                GameTime.Instance.Paused = true;
+            }
+        }
+        else if(collider.gameObject.layer == LayerMask.NameToLayer("Rider"))
+        {
+            if(collider.GetComponent<Rider>().TeamId != TeamId)
+            {
+                if (EnemyCollisionSystem != null)
+                {
+                    ParticleSystem newSystem = Instantiate(EnemyCollisionSystem);
+                    newSystem.transform.position = transform.position;
+                }
+
+                m_health -= 0.1f;
+            }
+        }
+        
     }
 }

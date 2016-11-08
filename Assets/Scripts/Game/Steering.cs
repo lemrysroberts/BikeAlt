@@ -1,21 +1,38 @@
 ﻿using UnityEngine;
 using System.Linq;
-using System.Collections;
+using System.Collections.Generic;
 
 public class Steering : MonoBehaviour
 {
     public int NumIncrements = 10;
     public float AngleRange = 45.0f;
     public float RaycastRange = 1.0f;
+    public LayerMask CollisionLayers;
 
-    //public int HysteresisFrames = 3;
+    public bool DrawHistory = false;
+    public int HistoryFocus = 0;
 
-    public float UpdateSteering(float angleToGlobalTarget)
+    private struct HistoricalSteeringData
     {
+        public float[] scores;
+        public Vector3 position;
+        public int winner;
+        public float riderAngle;
+    }
+
+    private List<HistoricalSteeringData> m_history = new List<HistoricalSteeringData>();
+
+    public float UpdateSteering(float angleToGlobalTarget, float riderAngle)
+    {
+        if (Input.GetKeyDown(KeyCode.PageUp)) { HistoryFocus++; }
+        if (Input.GetKeyDown(KeyCode.PageDown)) { HistoryFocus--; }
+
+        if(GameTime.Instance.Paused == true) return 0.0f;
+
         float angleDelta = (AngleRange * 2.0f) / (float)NumIncrements;
 
-        float startAngle = -AngleRange;
-        float endAngle = AngleRange;
+        float startAngle = -AngleRange + riderAngle;
+        float endAngle = AngleRange + riderAngle;
 
         // Debug.Log("Angle: " + angleToGlobalTarget);
 
@@ -40,11 +57,11 @@ public class Steering : MonoBehaviour
                 previousBlocked = false;
             }
 
-            // Check out of bounds:
+            //TODO: Check out of bounds:
             // Get offsetX at transform.position.y + direction.y and check to see if further out
 
             RaycastHit hitInfo;
-            if (Physics.Raycast(transform.position, direction, out hitInfo, RaycastRange))
+            if (Physics.Raycast(transform.position, direction, out hitInfo, RaycastRange, CollisionLayers.value))
             {
                 // Increase the heat from a hit proportional to distance of the hit, so closer obstacles are more dangerous
                 scores[increment] = 1.0f - Mathf.Pow(hitInfo.distance / RaycastRange, 2.0f);
@@ -90,7 +107,7 @@ public class Steering : MonoBehaviour
 
             HSBColor lineColor = HSBColor.Lerp(new HSBColor(Color.green), new HSBColor(Color.red), blurredScores[increment]);
 
-            Debug.DrawLine(transform.position, transform.position + direction * RaycastRange, lineColor.ToColor());
+            //Debug.DrawLine(transform.position, transform.position + direction * RaycastRange, lineColor.ToColor());
 
             if(blurredScores[increment] < minScore)
             {
@@ -99,12 +116,63 @@ public class Steering : MonoBehaviour
             }
         }
 
-        float winnerAngle = startAngle + (angleDelta * (float)maxIndex);
+        float winnerAngle = startAngle + (angleDelta * (float)maxIndex) - riderAngle;
 
         Quaternion winnerRotation = Quaternion.Euler(new Vector3(0.0f, winnerAngle, 0.0f));
         Vector3 winnerDirection = winnerRotation * Vector3.forward;
-        Debug.DrawLine(transform.position, transform.position + winnerDirection * 1.3f, Color.magenta);
+       // Debug.DrawLine(transform.position, transform.position + winnerDirection * 1.3f, Color.magenta);
+
+        HistoricalSteeringData newData = new HistoricalSteeringData();
+        newData.position = transform.position;
+        newData.scores = blurredScores;
+        newData.winner = maxIndex;
+        newData.riderAngle = riderAngle;
+
+        m_history.Insert(0, newData);
+
+        if(m_history.Count > 10)
+        {
+            m_history.RemoveAt(m_history.Count - 1);
+        }
+
+        
 
         return winnerDirection.x;
+    }
+
+    void OnDrawGizmos()
+    {
+        if(DrawHistory)
+        {
+            float angleDelta = (AngleRange * 2.0f) / (float)NumIncrements;
+
+            for (int i = 0; i < m_history.Count; i++)
+            {
+                float startAngle = -AngleRange - m_history[i].riderAngle;
+                float endAngle = AngleRange - m_history[i].riderAngle;
+
+                for (int increment = 0; increment < NumIncrements; ++increment)
+                {
+                    float angle = startAngle + (angleDelta * (float)increment);
+
+                    Quaternion rotation = Quaternion.Euler(new Vector3(0.0f, angle, 0.0f));
+                    Vector3 direction = rotation * Vector3.forward;
+
+                    HSBColor lineColor = HSBColor.Lerp(new HSBColor(Color.green), new HSBColor(Color.red), m_history[i].scores[increment]);
+
+                    Gizmos.color = lineColor.ToColor();
+                    Gizmos.DrawLine(m_history[i].position, m_history[i].position + direction * (i == (HistoryFocus % m_history.Count)? RaycastRange : 0.01f));
+
+                    if(increment == m_history[i].winner && i == (HistoryFocus % m_history.Count))
+                    {
+                        Gizmos.color = Color.magenta;
+                        Gizmos.DrawLine(m_history[i].position, m_history[i].position + direction * 1.3f);
+                        Debug.Log("Angle: " + angle);
+                    }
+                    
+                }
+
+            }
+        }
     }
 }

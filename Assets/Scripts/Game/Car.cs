@@ -16,7 +16,7 @@ public class Car : MonoBehaviour
         m_game = FindObjectOfType<BikeGangs>();
         m_renderer = GetComponent<MeshRenderer>();
         Color materialColor = m_renderer.material.color;
-        materialColor.b = materialColor.b + Random.Range(-0.15f, 0.15f);
+   //     materialColor.b = materialColor.b + Random.Range(-0.15f, 0.15f);
         m_renderer.material.color = materialColor;
     }
 
